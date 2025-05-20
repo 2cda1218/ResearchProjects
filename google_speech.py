@@ -23,6 +23,7 @@ def listen_util_ctrl(timeout_sec:int,silence_timeout = 10):
                     start_time = time() #タイムアウトの延長
                     print('音声取得成功')
                     break #これがあるとwhileのループの必要性がない...? そもそもr.listen(source,timeout = 10)にすればもっと簡素化できる?
+                    #そもそもbreak消して延長可能にしてもlistとかないからaudio上書きされて消える
                 except sr.WaitTimeoutError:
                     #音声無かった場合，タイムアウトの無音処理
                     if time() - start_time >= silence_timeout:
