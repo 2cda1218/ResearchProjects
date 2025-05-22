@@ -9,6 +9,11 @@ load_dotenv()
 # bot token
 TOKEN = os.getenv("TOKEN")
 
+# vc list
+joch = {} # join channel
+vccl = {} # vc client
+
+
 # set bot
 intents = discord.Intents.default()
 intents.messages = True
@@ -39,6 +44,29 @@ async def hello(ctx: discord.Interaction):
 async def reboot(ctx: discord.Interaction):
     await ctx.response.send_message('再起動を開始します')
     await bot.close()
+
+@tree.command(name = 'join',description = 'VCへの参加')
+async def join_vc(ctx: discord.Interaction):
+    if ctx.user.voice is None or ctx.user.voice.channel is None:
+        await ctx.response.send_message(f'まずはVCに参加してください')
+        return
+
+    joch[ctx.guild_id] = ctx.user.voice.channel
+    vccl[ctx.guild_id] = await joch[ctx.guild_id].connect()
+    await ctx.response.send_message('vcに参加しました')
+
+@tree.command(name = 'leave',description = 'vcから切断')
+async def leave_vc(ctx: discord.Interaction):
+    vc_client = discord.utils.get(bot.voice_clients,guild = ctx.guild)
+    if vc_client is None:
+        await ctx.response.send_message('botはvcに参加していません')
+        return
+    
+    del joch[ctx.guild_id]
+    del vccl[ctx.guild_id]
+
+    await vc_client.disconnect()
+    await ctx.response.send_message('終了します')
 
 #-------
 # voice
