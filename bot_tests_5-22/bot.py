@@ -45,6 +45,9 @@ async def reboot(ctx: discord.Interaction):
     await ctx.response.send_message('再起動を開始します')
     await bot.close()
 
+#-------
+# voice
+#-------
 @tree.command(name = 'join',description = 'VCへの参加')
 async def join_vc(ctx: discord.Interaction):
     if ctx.user.voice is None or ctx.user.voice.channel is None:
@@ -67,11 +70,6 @@ async def leave_vc(ctx: discord.Interaction):
 
     await vc_client.disconnect()
     await ctx.response.send_message('終了します')
-
-#-------
-# voice
-#-------
-
 
 #----------
 # bot run
