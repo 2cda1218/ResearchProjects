@@ -5,6 +5,8 @@
 ## 現在のTODO
 * 音声認識のコード改修 → threadingのタイムアウト機能の調査
 * 音声認識のテスト → 用意した三種類の挙動のチェックと評価
+* B+でVoiceboxとかgTTSをやってみる
+* AIのAPIをpyで制御してみる
 ## 進捗
 * Git-GitHubでの管理追加
 * discord botの作成
