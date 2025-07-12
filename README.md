@@ -5,8 +5,8 @@
 ## 現在のTODO
 * 音声認識のコード改修 → threadingのタイムアウト機能の調整(タイムアウトはできるが終了されないという欠陥が判明)
 * 音声認識のテスト → 用意した三種類の挙動のチェックと評価
-* B+でVoiceboxとかgTTSをやってみる -> voicevoxインストールできないからvoicevox engineにする
-* AIのAPIをpyで制御してみる -> 現状はGeminiでいろいろとテスト
+* pi3,4,5でgTTS+Gemini連携を試す
+* AIのAPIをpyで制御してみる -> 様々な分類モデルを利用してシステムへの採用評価
 ## 進捗
 * Git-GitHubでの管理追加
 * discord botの作成
@@ -19,3 +19,4 @@
 * ラズパイ3B+のセットアップはした
 * Geminiのスクリプト制御を発展させたが事前情報の部分に課題がある
 * voicevox coreのインストール失敗
+* Pi5でならvoicevoxは動かせるが発熱問題があるためvoicevoxは不採用にする
