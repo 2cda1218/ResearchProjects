@@ -1,5 +1,4 @@
 import RPi.GPIO as GPIO
-# from gpiozero import Servo 先代スクリプトに入っていたが使用されていないモジュール
 from time import sleep,time
 import serial
 import speech_recognition as sr
@@ -12,13 +11,14 @@ import tkinter as tk
 from tkinter import scrolledtext
 import logging
 from dotenv import load_dotenv
+import sound_files.create_guide as cguide
 
-# initialize logging
+# loggingの初期化
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 logger.info("loggingを開始します")
 
-# initialize env
+# .envロード
 logger.info('.envをロードします')
 
 load_dotenv()
@@ -27,7 +27,7 @@ GEMINI_TOKEN = os.getenv("GEMINI_TOKEN")
 
 logger.info('TOKENをロードしました')
 
-# initialize GPIO
+# GPIO初期化
 logger.info('GPIOの初期化開始...')
 
 GPIO.setmode(GPIO.BCM)
@@ -38,7 +38,7 @@ pwm.start(0)
 
 logger.info('GPIOの初期化成功')
 
-# initialize Arduino's Serial
+# シリアル通信の初期化
 logger.info('シリアル通信の初期化開始...')
 
 ser = serial.Serial('/dev/tty/ACM0', 9600)
@@ -47,8 +47,12 @@ sleep(2)
 
 logger.info('シリアル通信の初期化成功')
 
-# initialize RAG
-# 完成待ち
+# 固定応答ファイル整合性確認 threadingで非同期化
+file_check_thread = threading.Thread(target=cguide.check_wav_files)
+file_check_thread.start()
+
+# RAGの初期化
+# 実装待機中
 logger.info('RAGの初期化開始...')
 
 #code
@@ -103,107 +107,52 @@ def play_sound(sound_path:str):
     os.system(f'aplay {sound_path}') # 'aplay {sound_path} &'で非同期で再生できるが必要あるのか? mp3再生の場合はaplayをmpg321にする
 
 # 音声認識 差し替える必要あり
-def listen_util_ctrl(timeout_sec:int,silence_timeout:int,interval:float):
+def listen_util_ctrl():
     r = sr.Recognizer()
-    recognized_txt = ""
-    start_time = time()
-
-    def listen_thread():
-        nonlocal recognized_txt
-        nonlocal start_time
-        start_time  = time()
-        with sr.Microphone(sample_rate = 16000) as source:
-            logger.info("音声取得を開始")
-            audio = []
-
-            # 無音検知
-            while time() - start_time < timeout_sec:
-                try:
-                    #タイムアウト内でも録音続行
-                    audio.append(r.listen(source,timeout = 1,phrase_time_limit=10))
-                    start_time = time() #タイムアウトの延長は5秒の方がいい？
-                    logger.info('音声取得成功,録音を続けます')
-
-                except sr.WaitTimeoutError:
-                    #音声無かった場合，タイムアウトの無音処理
-                    if time() - start_time >= silence_timeout:
-                        print("10秒の無音で終了します")
-                        recognized_txt = "無音なので終了しました"
-                        break
-                    print("無音")
-                except sr.UnknownValueError:
-                    audio.append("音声が認識できません")
-                    #保険に時間延長入れた方がいい？
-                except sr.RequestError as e:
-                    recognized_txt = f"サービスに接続できませんでした : {e}"
-                    break
-                except Exception as e: # sr.RequestError as e:だけだったけどそれ以外のExceptionもキャッチした方がより安定する?
-                    recognized_txt = f"error has occured : {e}"
-                    break
-
-        if audio:
-            recognized_txt = ''
-            for data in audio:
-                if isinstance(data, sr.AudioData):
-                    try:
-                        text = r.recognize_google(data, language = "ja-jp")
-                        recognized_txt += f' {text}'
-                        print("認識されたテキスト：",text)
-                    except Exception as e:
-                        recognized_txt += f"認識エラー:{e}"
-                else:
-                    recognized_txt += f' {data}'
-        print(f'最終認識:{recognized_txt}')
-
-    #認識スレッド開始
-    listen_thread_instance = threading.Thread(target = listen_thread)
-    listen_thread_instance.start()
-
-    #タイムアウト 機能はしているがシステムに上手くいかなさそう
-#    listen_thread_instance.join(timeout = timeout_sec)
-#    if listen_thread_instance.is_alive():
-#        print("認識が終了できません．タイムアウトしました．")
-#        recognized_txt = "音声認識スレッドがタイムアウトしました．"
-
-    while listen_thread_instance.is_alive():
-        listen_thread_instance.join(timeout = interval)
-        if time() - start_time >= timeout_sec:
-            print("認識が終了できません．タイムアウトしました.")
-            recognized_txt = "音声認識スレッドがタイムアウトしました."
-            break
-
-    #音声認識結果をファイルに保存
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with open("output.txt","a",encoding = "utf-8") as file:
-        file.write(f"\n[{current_time}] {recognized_txt}")
-        print("テキストをoutput.txtに保存しました.")
-
-        return recognized_txt
-
-    #認識スレッド開始
-    listen_thread_instance = threading.Thread(target = listen_thread)
-    listen_thread_instance.start()
-
-    #タイムアウト
-    # スレッドの強制終了はしていないが認識自体は無理やり生成文章を作成することで強制終了している．
-    # スレッド自体が10秒しか存続できないため10秒を越える録音には対応できない．
-    # いずれにしてもタイムアウトの調整には現場での一回の通話時間がどれくらいあるのかを調査することで，
-    # 設定する必要があるという判断(ただし，認識のテスト時は一旦10秒で試してみる)
-    listen_thread_instance.join(timeout = timeout_sec)
-
-    if listen_thread_instance.is_alive():
-        print("認識が終了できません．タイムアウトしました．")
-        recognized_txt = "音声認識がタイムアウトしました．"
-
-    #音声認識結果をファイルに保存
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with open("output.txt","a",encoding = "utf-8") as file:
-        file.write(f"\n[{current_time}] {recognized_txt}")
-        print("テキストをoutput.txtに保存しました.")
-
-        return recognized_txt
     
-# recognized_text = listen_util_ctrl(30,silence_timeout=10,0.5)
+    with sr.Microphone(sample_rate = 16000) as source:
+        logger.info("音声取得を開始")
+        audio = []
+        # 無音検知
+        try:
+            #タイムアウト内でも録音続行
+            audio.extend([r.listen(source,timeout = 5),"success"])# 5秒無音でタイムアウト
+            logger.info('音声取得成功')
+
+        except sr.WaitTimeoutError:
+            # 無音の場合
+            audio.extend(["無音","error"])
+            logger.warning("無音でした")
+        except sr.UnknownValueError:
+            # 認識不可の時
+            audio.extend(["音声が認識できません","error"])
+            logger.warning("認識が不可能でした")
+            
+        except sr.RequestError as e:
+            # 接続不可の時
+            audio.extend([f"サービスに接続できませんでした : {e}","error"])
+            logger.warning("サービスへの接続に失敗しました",exc_info=True)
+            
+        except Exception as e: # sr.RequestError as e:だけだったけどそれ以外のExceptionもキャッチしておく
+            audio.extend([f"エラーが発生しました : {e}","error"])
+            logger.warning("エラーが発生しました",exc_info=True)
+
+    if audio[1] == "success":
+        try:
+            audio[0] = r.recognize_google(audio[0], language = "ja-jp")
+            logger.info("音声認識に成功")
+        except:
+            audio[0] = "認識エラーが発生しました"
+            logger.warning("認識エラーが発生しました")
+    logger.info(f'最終結果:{audio[0]}')
+
+    #音声認識結果をファイルに保存
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    with open("output.txt","a",encoding = "utf-8") as file:
+        file.write(f"\n[{current_time}] {audio[0]}")
+        logger.info("テキストをoutput.txtに保存しました.")
+
+        return audio
 
 # 分類
 def rag():
@@ -273,12 +222,19 @@ def main():
                     # 自動応答システム本体↓↓↓
                     logger.info('自動応答システム起動')
                     
-                    play_sound('sound_files/guide.wav') # 'file_pathに案内用の音声パスを設定
+                    play_sound('sound_files/guide/guide.wav')
                     
                     is_need_rec = True
-                    
+                    loop_count = 0
+
                     while is_need_rec:
-                        rec_text = listen_util_ctrl(30,5,0.5)
+                        rec_text, status = listen_util_ctrl()
+                        if status == "error":
+                            if loop_count < 3:
+                                loop_count += 1
+                                continue
+                            break # 連続でエラーが出た場合の処理を追加する必要がある
+
                     
                     # 分類→定型or非定型(rag()で分類→命名は変更の可能性あり)
                     result = rag()
