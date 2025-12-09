@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_WAV_FILES = ["guide.wav","kesseki_kakunin.wav","kesseki_kakutei.wav","chikoku_kakunin.wav","chikoku_kakutei.wav","error.wav"]
+REQUIRED_WAV_FILES = ["guide.wav","kesseki_kakunin.wav","kesseki_kakutei.wav","chikoku_kakunin.wav","chikoku_kakutei.wav","error.wav","retry.wav"]
 
 def Generate_Guide(file_type:str,path:str):
     if file_type == "guide.wav":
@@ -19,6 +19,8 @@ def Generate_Guide(file_type:str,path:str):
         tts = gTTS("遅刻ですね．わかりました．他にご用件はございますか？",lang="ja")
     elif file_type == "error.wav":
         tts = gTTS("システムでエラーが発生しました．担当者にお繋ぎしますので，しばらくお待ちください．",lang="ja")
+    elif file_type == "retry.wav":
+        tts = gTTS("認識に失敗しました．お手数おかけしますが，もう一度お話ください．",lang="ja")
     
     tts.save(f"{path}")
 
