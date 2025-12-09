@@ -1,17 +1,21 @@
+import chromadb
+from datetime import datetime
+from dotenv import load_dotenv
+import logging
+import os
+import requests
 import RPi.GPIO as GPIO
-from time import sleep,time
+from sentence_transformers import SentenceTransformer as ST
 import serial
 import speech_recognition as sr
-import threading
-from datetime import datetime
 import sys
-import requests
-import os
+import threading
+from time import sleep
 import tkinter as tk
 from tkinter import scrolledtext
-import logging
-from dotenv import load_dotenv
+
 import sound_files.create_guide as cguide
+
 
 # loggingの初期化
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
@@ -52,12 +56,14 @@ file_check_thread = threading.Thread(target=cguide.check_wav_files)
 file_check_thread.start()
 
 # RAGの初期化
-# 実装待機中
-logger.info('RAGの初期化開始...')
+logger.info('分類モデルの初期化開始...')
 
-#code
+embedder = ST("all-MiniLM-L6-v2")
 
-logger.info('RAGの初期化成功')
+chroma_client = chromadb.Client()
+collection = chroma_client.get_or_create_collection("school_pdf_docs")
+
+logger.info('分類モデルの初期化成功')
 
 
 # tkinter GUI作成
@@ -130,11 +136,11 @@ def listen_util_ctrl():
             
         except sr.RequestError as e:
             # 接続不可の時
-            audio.extend([f"サービスに接続できませんでした : {e}","error"])
+            audio.extend([f"サービスに接続できませんでした : {e}","connect-error"])
             logger.warning("サービスへの接続に失敗しました",exc_info=True)
             
         except Exception as e: # sr.RequestError as e:だけだったけどそれ以外のExceptionもキャッチしておく
-            audio.extend([f"エラーが発生しました : {e}","error"])
+            audio.extend([f"エラーが発生しました : {e}","except-error"])
             logger.warning("エラーが発生しました",exc_info=True)
 
     if audio[1] == "success":
@@ -170,7 +176,7 @@ def non_pattern_res():
     return
 
 # LINE
-def output_res(result:str):
+def send_line(ctx:str):
     logger.info('LINEへの出力を開始します')
     url = 'https://api.line.me/v2/bot/message/broadcast'
     headers = {
@@ -181,7 +187,7 @@ def output_res(result:str):
         "messages": [
             {
                 "type": "text",
-                "text": result
+                "text": ctx
             }
         ]
     }
@@ -232,8 +238,23 @@ def main():
                         if status == "error":
                             if loop_count < 3:
                                 loop_count += 1
+                                logger.info(f"{loop_count}回目の無音または認識失敗をしました")
+                                play_sound("sound_files/guide/retry.wav")
                                 continue
-                            break # 連続でエラーが出た場合の処理を追加する必要がある
+
+                            logger.info("無音または認識困難の可能性がある着信です")
+                            play_sound('sound_files/guide/error.wav')
+                            break
+
+                        elif status == "connect-error" or "other-error":
+                            logger.info("サービスへの接続またはその他のエラーによってシステムを実行できません")
+                            play_sound('soun_files/guide/error.wav')
+                            break
+                        
+                        send_line(f"【認識した音声】\n{rec_text}")
+                        
+                        # 分類処理
+                        result = rag(rec_text)
 
                     
                     # 分類→定型or非定型(rag()で分類→命名は変更の可能性あり)
