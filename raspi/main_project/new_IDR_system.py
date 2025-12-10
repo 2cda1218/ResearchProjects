@@ -1,8 +1,13 @@
 import chromadb
 from datetime import datetime
 from dotenv import load_dotenv
+import fasttext
+from google import genai as gemini
+from google.genai import types
+from gtts import gTTS
 import logging
 import os
+import pandas as pd
 import requests
 import RPi.GPIO as GPIO
 from sentence_transformers import SentenceTransformer as ST
@@ -55,13 +60,34 @@ logger.info('シリアル通信の初期化成功')
 file_check_thread = threading.Thread(target=cguide.check_wav_files)
 file_check_thread.start()
 
-# RAGの初期化
+# 分類の初期化
 logger.info('分類モデルの初期化開始...')
 
 embedder = ST("all-MiniLM-L6-v2")
 
 chroma_client = chromadb.Client()
 collection = chroma_client.get_or_create_collection("school_pdf_docs")
+
+gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
+gemini_model = "gemini-2.5-flash-lite"
+gemini_config = types.GenerateContentConfig(temperature=0.7,max_output_tokens=512)
+
+df = pd.read_csv("datasets/gakusyudata.csv")
+with open("datasets/train.txt","w",encoding="utf-8") as f:
+    for _, row in df.iterrows():
+        label = row["label"]
+        text = row["text"]
+        f.write(f"__label__{label} {text}\n")
+
+model = fasttext.train_supervised(
+    input = "datasets/train.txt",
+    epoch = 800,
+    lr = 1,
+    wordNgrams = 2,
+    minn = 2,
+    maxn = 5,
+    verbose = 2
+)
 
 logger.info('分類モデルの初期化成功')
 
@@ -161,8 +187,12 @@ def listen_util_ctrl():
         return audio
 
 # 分類
-def rag():
+def rag(user_input:str):
     logger.info('分類を開始します')
+    labels, scores = model.predict(user_input,k=2)
+    label1, score1 = labels[0].replace("__label__",""), scores[0]
+    label2, score2 = labels[1].replace("__label__",""), scores[0]
+    
     return
 
 # 定型
