@@ -79,6 +79,7 @@ with open("datasets/train.txt","w",encoding="utf-8") as f:
         text = row["text"]
         f.write(f"__label__{label} {text}\n")
 
+# この学習フェーズが長くなる場合はthreadingで非同期処理にした方が良いかも？
 model = fasttext.train_supervised(
     input = "datasets/train.txt",
     epoch = 800,
