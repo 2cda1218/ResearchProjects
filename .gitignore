@@ -3,6 +3,6 @@ bot_tests_5-22/.env
 資料/material/
 資料/回路図/
 raspi/bunrui_test/.env
-raspi/main_project/.env
 raspi/bunrui_test/ft_model.bin
 raspi/main_project/datasets/ft_model.bin
+raspi/main_project/.env
