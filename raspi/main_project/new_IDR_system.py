@@ -66,7 +66,7 @@ logger.info('分類モデルの初期化開始...')
 embedder = ST("all-MiniLM-L6-v2")
 
 chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection("school_pdf_docs")
+collection = chroma_client.get_or_create_collection("school_pdf_docs") #pdfの指定を調整
 
 gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
 gemini_model = "gemini-2.5-flash-lite"
@@ -79,7 +79,7 @@ with open("datasets/train.txt","w",encoding="utf-8") as f:
         text = row["text"]
         f.write(f"__label__{label} {text}\n")
 
-# この学習フェーズが長くなる場合はthreadingで非同期処理にした方が良いかも？
+# この学習フェーズが長くなる場合はmultiprocessingで非同期処理
 model = fasttext.train_supervised(
     input = "datasets/train.txt",
     epoch = 800,

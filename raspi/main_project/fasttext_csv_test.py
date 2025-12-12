@@ -54,7 +54,7 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
 chroma_client = chromadb.Client()
 # get_or_create_collection()の引数は何？
-collection = chroma_client.get_or_create_collection("school_pdf_docs")
+collection = chroma_client.get_or_create_collection("school_pdf_docs") # ???
 
 print("✅ Gemini API と Chroma 初期化完了")
 
