@@ -139,6 +139,7 @@ def main():
     logger.info(f"input > {user_input}")
     start_time = time.perf_counter()
     labels, scores = model.predict(user_input, k=2)
+    end_time = time.perf_counter()
     label1, score1 = labels[0].replace("__label__",""), scores[0]
     label2, score2 = labels[1].replace("__label__",""), scores[1]
 
