@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import PyPDF2
 import uuid
 import logging
+import time
 
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -50,7 +51,8 @@ def gemini_answer(input_txt:str):
         "あなたは学校情報に示された学校の事務員とする．\n"
         "以下の学校情報に従って連絡セクションの内容に対して丁寧な回答をしてもらう．\n"
         "学校情報から回答に必要な情報が得られない場合は，「すみません，その質問にはお答えすることができません．」と必ず回答すること．\n"
-        "答える事が可能な場合には，丁寧な2,3文の文章を作成して回答すること\n"
+        "答える事が可能な場合には，丁寧な2文の文章を作成して回答すること\n"
+        "宛名は含めないこと"
         "【学校情報】\n"
         f"{context}\n"
         "【連絡】\n"
@@ -119,19 +121,28 @@ def main():
     logger.info("分類モデルを確認します")
     if not os.path.exists(model_path):
         logger.info("モデルが見つからないので作成を行います")
+        start_time = time.perf_counter()
         train_model()
+        end_time = time.perf_counter()
+        logger.info(f"学習時間：{end_time - start_time}")
     logger.info("回答用pdfのロードを行います")
+    start_time = time.perf_counter()
     load_pdf()
+    end_time = time.perf_counter()
+    logger.info(f"PDFロード時間：{end_time - start_time}")
     logger.info("分類モデルのロードを行います")
+    start_time = time.perf_counter()
     model = fasttext.load_model(model_path)
+    end_time = time.perf_counter()
+    logger.info(f"モデルロード時間：{end_time - end_time}")
     user_input = "病院に行ってから登校します"
     logger.info(f"input > {user_input}")
-    
+    start_time = time.perf_counter()
     labels, scores = model.predict(user_input, k=2)
     label1, score1 = labels[0].replace("__label__",""), scores[0]
     label2, score2 = labels[1].replace("__label__",""), scores[1]
 
-    logger.info(f"分類結果\nLabels: Label1 [{label1}], Label2 [{label2}]\nScores: Score1 [{score1}], Score2 [{score2}]\n")
+    logger.info(f"分類結果\nLabels: Label1 [{label1}], Label2 [{label2}]\nScores: Score1 [{score1}], Score2 [{score2}]\n分類時間: {end_time - start_time}")
 
     if 0.7 <= score1 and 0.2 <= abs(score1 - score2):
         pattern = "定型"
