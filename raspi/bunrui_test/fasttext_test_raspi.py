@@ -119,22 +119,26 @@ def train_model():
 
 def main():
     logger.info("分類モデルを確認します")
+
     if not os.path.exists(model_path):
         logger.info("モデルが見つからないので作成を行います")
         start_time = time.perf_counter()
         train_model()
         end_time = time.perf_counter()
         logger.info(f"学習時間：{end_time - start_time}")
+    
     logger.info("回答用pdfのロードを行います")
     start_time = time.perf_counter()
     load_pdf()
     end_time = time.perf_counter()
     logger.info(f"PDFロード時間：{end_time - start_time}")
+    
     logger.info("分類モデルのロードを行います")
     start_time = time.perf_counter()
     model = fasttext.load_model(model_path)
     end_time = time.perf_counter()
     logger.info(f"モデルロード時間：{end_time - end_time}")
+    
     user_input = "病院に行ってから登校します"
     logger.info(f"input > {user_input}")
     start_time = time.perf_counter()
