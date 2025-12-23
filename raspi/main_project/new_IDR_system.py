@@ -6,8 +6,10 @@ from google import genai as gemini
 from google.genai import types
 from gtts import gTTS
 import logging
+import multiprocessing as mp
 import os
 import pandas as pd
+import PyPDF2
 import requests
 import RPi.GPIO as GPIO
 from sentence_transformers import SentenceTransformer as ST
@@ -18,9 +20,15 @@ import threading
 from time import sleep
 import tkinter as tk
 from tkinter import scrolledtext
+import uuid
 
 import sound_files.create_guide as cguide
+import datasets.train_model as train
 
+# path登録
+MAIN_DIR = os.path.dirname(os.path.abspath(__file__))
+PDF_PATH = os.path.join(MAIN_DIR,"datasets","schooltest.pdf")
+MODEL_PATH = os.path.join(MAIN_DIR,"datasets","ft_model.bin")
 
 # loggingの初期化
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
@@ -61,36 +69,25 @@ file_check_thread = threading.Thread(target=cguide.check_wav_files)
 file_check_thread.start()
 
 # 分類の初期化
-logger.info('分類モデルの初期化開始...')
-
+logger.info('分類機能の初期化開始...')
 embedder = ST("all-MiniLM-L6-v2")
 
 chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection("school_pdf_docs") #pdfの指定を調整
+try:
+    chroma_client.delete_collection("schooltest.pdf")
+except:
+    logger.info("該当するデータは見つかりませんでした")
+    pass
+collection = chroma_client.get_or_create_collection("schooltest.pdf")
 
 gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
 gemini_model = "gemini-2.5-flash-lite"
 gemini_config = types.GenerateContentConfig(temperature=0.7,max_output_tokens=512)
 
-df = pd.read_csv("datasets/gakusyudata.csv")
-with open("datasets/train.txt","w",encoding="utf-8") as f:
-    for _, row in df.iterrows():
-        label = row["label"]
-        text = row["text"]
-        f.write(f"__label__{label} {text}\n")
+check_model = mp.Process(train.train_model)
+check_model.start()
 
-# この学習フェーズが長くなる場合はmultiprocessingで非同期処理
-model = fasttext.train_supervised(
-    input = "datasets/train.txt",
-    epoch = 800,
-    lr = 1,
-    wordNgrams = 2,
-    minn = 2,
-    maxn = 5,
-    verbose = 2
-)
-
-logger.info('分類モデルの初期化成功')
+logger.info('分類機能の初期化成功')
 
 
 # tkinter GUI作成
@@ -129,6 +126,31 @@ def get_last_line(file_path:str):
     except FileNotFoundError:
         return '指定のファイルがみつかりません'
 
+def load_pdf():
+    logger.info("PDFのロードを開始します")
+    with open(PDF_PATH,"rb") as f:
+        reader = PyPDF2.PdfReader(f)
+        texts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                texts.append(text.strip())
+    chunks = []
+    for text in texts:
+        while len(text):
+            chunks.append(text[:500])
+            text = text[500:]
+        if text:
+            chunks.append(text)
+    for chunk in chunks:
+        emb = embedder.encode(chunk).tolist()
+        collection.add(
+            ids = [str(uuid.uuid4())],
+            documents = [chunk],
+            embeddings = [emb]
+        )
+    logger.info("PDFのロード終了")
+
 # サーボ回転
 def set_servo_angle(angle:int):
     duty = angle / 18 + 2
@@ -139,7 +161,7 @@ def set_servo_angle(angle:int):
 def play_sound(sound_path:str):
     os.system(f'aplay {sound_path}') # 'aplay {sound_path} &'で非同期で再生できるが必要あるのか? mp3再生の場合はaplayをmpg321にする
 
-# 音声認識 差し替える必要あり
+# 音声認識
 def listen_util_ctrl():
     r = sr.Recognizer()
     
@@ -190,6 +212,7 @@ def listen_util_ctrl():
 # 分類
 def rag(user_input:str):
     logger.info('分類を開始します')
+    model = fasttext.load_model(MODEL_PATH)
     labels, scores = model.predict(user_input,k=2)
     label1, score1 = labels[0].replace("__label__",""), scores[0]
     label2, score2 = labels[1].replace("__label__",""), scores[0]
@@ -247,7 +270,9 @@ def main():
         return
     finally:
         except_finally()
-    
+    # PDFのロード
+    load_pdf()
+
     # Main System
     while cont_sys:
         set_servo_angle(90)
