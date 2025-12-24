@@ -4,7 +4,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_WAV_FILES = ["guide.wav","kesseki_kakunin.wav","kesseki_kakutei.wav","chikoku_kakunin.wav","chikoku_kakutei.wav","error.wav","retry.wav"]
+REQUIRED_WAV_FILES = [
+    "guide.wav",
+    "kesseki_kakunin.wav",
+    "kesseki_kakutei.wav",
+    "chikoku_kakunin.wav",
+    "chikoku_kakutei.wav",
+    "error.wav",
+    "retry.wav"
+    ]
 
 def Generate_Guide(file_type:str,path:str):
     if file_type == "guide.wav":
@@ -27,6 +35,7 @@ def Generate_Guide(file_type:str,path:str):
 def check_wav_files():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     guide_dir = os.path.join(script_dir, "guide")
+    logger.info("固定返答の整合性検証を開始します")
 
     if not os.path.exists(guide_dir):
         os.makedirs(guide_dir)
