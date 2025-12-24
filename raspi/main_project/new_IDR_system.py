@@ -29,6 +29,8 @@ import datasets.train_model as train
 MAIN_DIR = os.path.dirname(os.path.abspath(__file__))
 PDF_PATH = os.path.join(MAIN_DIR,"datasets","schooltest.pdf")
 MODEL_PATH = os.path.join(MAIN_DIR,"datasets","ft_model.bin")
+GUIDE_PATH = os.path.join(MAIN_DIR,"sound_files","guide")
+GENERATE_SOUND_PATH = os.path.join(MAIN_DIR,"sound_files","generate")
 
 # loggingの初期化
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s')
@@ -164,33 +166,42 @@ def play_sound(sound_path:str):
 # 音声認識
 def listen_util_ctrl():
     r = sr.Recognizer()
-    
+    loop_count = 0
     with sr.Microphone(sample_rate = 16000) as source:
-        logger.info("音声取得を開始")
-        audio = []
-        # 無音検知
-        try:
+        while loop_count < 3:
+            logger.info("音声取得を開始")
+            audio = []
+            # 無音検知
+            try:
             #タイムアウト内でも録音続行
-            audio.extend([r.listen(source,timeout = 5),"success"])# 5秒無音でタイムアウト
-            logger.info('音声取得成功')
+                audio.extend([r.listen(source,timeout = 5),"success"])# 5秒無音でタイムアウト
+                logger.info('音声取得成功')
 
-        except sr.WaitTimeoutError:
-            # 無音の場合
-            audio.extend(["無音","error"])
-            logger.warning("無音でした")
-        except sr.UnknownValueError:
-            # 認識不可の時
-            audio.extend(["音声が認識できません","error"])
-            logger.warning("認識が不可能でした")
+            except sr.WaitTimeoutError:
+                # 無音の場合
+                audio.extend(["無音","error"])
+                logger.warning("無音でした")
+                play_sound(GUIDE_PATH,"retry.wav")
+            except sr.UnknownValueError:
+                # 認識不可の時
+                audio.extend(["音声が認識できません","error"])
+                logger.warning("認識が不可能でした")
+                play_sound(GUIDE_PATH,"retry.wav")
             
-        except sr.RequestError as e:
-            # 接続不可の時
-            audio.extend([f"サービスに接続できませんでした : {e}","connect-error"])
-            logger.warning("サービスへの接続に失敗しました",exc_info=True)
+            except sr.RequestError as e:
+                # 接続不可の時
+                audio.extend([f"サービスに接続できませんでした : {e}","error"])
+                logger.warning("サービスへの接続に失敗しました",exc_info=True)
             
-        except Exception as e: # sr.RequestError as e:だけだったけどそれ以外のExceptionもキャッチしておく
-            audio.extend([f"エラーが発生しました : {e}","except-error"])
-            logger.warning("エラーが発生しました",exc_info=True)
+            except Exception as e:
+                # その他のエラー
+                audio.extend([f"エラーが発生しました : {e}","error"])
+                logger.warning("エラーが発生しました",exc_info=True)
+            finally:
+                loop_count += 1
+                logger.info(f"{loop_count}回目の録音に失敗しました")
+        else:
+            logger.info("異常終了しました")
 
     if audio[1] == "success":
         try:
@@ -198,6 +209,7 @@ def listen_util_ctrl():
             logger.info("音声認識に成功")
         except:
             audio[0] = "認識エラーが発生しました"
+            audio[1] = "error"
             logger.warning("認識エラーが発生しました")
     logger.info(f'最終結果:{audio[0]}')
 
@@ -210,22 +222,37 @@ def listen_util_ctrl():
         return audio
 
 # 分類
-def rag(user_input:str):
+def predict(user_input:str):
     logger.info('分類を開始します')
     model = fasttext.load_model(MODEL_PATH)
     labels, scores = model.predict(user_input,k=2)
     label1, score1 = labels[0].replace("__label__",""), scores[0]
     label2, score2 = labels[1].replace("__label__",""), scores[0]
     
-    return
+    logger.info(f"分類結果\nLabels: Label1 [{label1}], Label2 [{label2}]\nScores: Score1 [{score1}], Score2 [{score2}]\n分類時間: {end_time - start_time}")
+
+    if score1 >= 0.7 and abs(score1 - score2) >= 0.2:
+        logger.info(f"定型処理:{label1}")
+        return "pattern" , label1
+    
+    elif label1 == "その他":
+        logger.info(f"非定型処理:{label1}")
+        return "non-pattern" , label1
+    else:
+        logger.info("曖昧処理")
+        return "non-pattern" , "曖昧"
 
 # 定型
-def pattern_res():
+def pattern_res(label:str):
     logger.info('定型処理を開始')
+    if label == "遅刻":
+        logger.info("遅刻の処理を開始")
+    else:
+        logger.info("欠席の処理を開始")
     return
 
 # 非定型
-def non_pattern_res():
+def non_pattern_res(text:str):
     logger.info('非定型処理を開始')
     return
 
@@ -284,51 +311,29 @@ def main():
                     # 自動応答システム本体↓↓↓
                     logger.info('自動応答システム起動')
                     
-                    play_sound('sound_files/guide/guide.wav')
+                    play_sound(os.path.join(GUIDE_PATH,"guide.wav"))
+
+                    rec_text, status = listen_util_ctrl()
+                    if status == "error":
+                        logger.info("サービスへの接続またはその他のエラーによってシステムを実行できません")
+                        play_sound(GUIDE_PATH,'error.wav')
+                    send_line(f"【認識した音声】\n{rec_text}")
                     
-                    is_need_rec = True
-                    loop_count = 0
-
-                    while is_need_rec:
-                        rec_text, status = listen_util_ctrl()
-                        if status == "error":
-                            if loop_count < 3:
-                                loop_count += 1
-                                logger.info(f"{loop_count}回目の無音または認識失敗をしました")
-                                play_sound("sound_files/guide/retry.wav")
-                                continue
-
-                            logger.info("無音または認識困難の可能性がある着信です")
-                            play_sound('sound_files/guide/error.wav')
-                            break
-
-                        elif status == "connect-error" or "other-error":
-                            logger.info("サービスへの接続またはその他のエラーによってシステムを実行できません")
-                            play_sound('soun_files/guide/error.wav')
-                            break
-                        
-                        send_line(f"【認識した音声】\n{rec_text}")
-                        
-                        # 分類処理
-                        result = rag(rec_text)
+                    # 分類処理
+                    pattern , label = predict(rec_text)
 
                     
                     # 分類→定型or非定型(rag()で分類→命名は変更の可能性あり)
-                    result = rag()
-                    # 定型処理(pattern_res()で続きを処理→命名は変更の可能性あり)
-                    # 非定型処理(non_pattern_res()で続きを処理→命名は変更の可能性あり)
-                    if result[0] == 'pattern':
-                        pattern_res()
-                    elif result[0] == 'non-pattern':
-                        non_pattern_res()
+                    if pattern == 'pattern':
+                        pattern_res(label)
                     else:
-                        logger.warning('分類に異常あり')
+                        non_pattern_res(rec_text)
                     
                     set_servo_angle(90)
                     
                     logger.info('自動応答システム終了')
                     sleep(5)
-                    output_res()
+                    
             except KeyboardInterrupt:
                 logger.info('システムを終了します')
                 cont_sys = False
