@@ -11,25 +11,28 @@ REQUIRED_WAV_FILES = [
     "chikoku_kakunin.wav",
     "chikoku_kakutei.wav",
     "error.wav",
-    "retry.wav"
+    "retry.wav",
+    "yes_or_no.wav"
     ]
 
 def Generate_Guide(file_type:str,path:str):
     if file_type == "guide.wav":
-        tts = gTTS("こちらは土屋研究室です．ご用件をお話しください．",lang="ja")
+        txt = "こちらは土屋研究室です．ご用件をお話しください．"
     elif file_type == "kesseki_kakunin.wav":
-        tts = gTTS("欠席のご連絡で間違いありませんか？",lang="ja")
+        txt = "欠席のご連絡で間違いありませんか？"
     elif file_type == "kesseki_kakutei.wav":
-        tts = gTTS("欠席ですね．わかりました．他にご用件はございますか？",lang="ja")
+        txt = "欠席ですね．わかりました．他にご用件はございますか？"
     elif file_type == "chikoku_kakunin.wav":
-        tts = gTTS("遅刻のご連絡で間違いありませんか？",lang="ja")
+        txt = "遅刻のご連絡で間違いありませんか？"
     elif file_type == "chikoku_kakutei.wav":
-        tts = gTTS("遅刻ですね．わかりました．他にご用件はございますか？",lang="ja")
+        txt = "遅刻ですね．わかりました．他にご用件はございますか？"
     elif file_type == "error.wav":
-        tts = gTTS("システムでエラーが発生しました．担当者にお繋ぎしますので，しばらくお待ちください．",lang="ja")
+        txt = "システムでエラーが発生しました．担当者にお繋ぎしますので，しばらくお待ちください．"
     elif file_type == "retry.wav":
-        tts = gTTS("認識に失敗しました．お手数おかけしますが，もう一度お話ください．",lang="ja")
-    
+        txt = "認識に失敗しました．お手数おかけしますが，もう一度お話ください．"
+    elif file_type == "yes_or_no.wav":
+        txt = "ハイかイイエでお答えください．"
+    tts = gTTS(txt,lang="ja")
     tts.save(f"{path}")
 
 def check_wav_files():
