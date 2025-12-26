@@ -245,10 +245,38 @@ def predict(user_input:str):
 # 定型
 def pattern_res(label:str):
     logger.info('定型処理を開始')
-    if label == "遅刻":
-        logger.info("遅刻の処理を開始")
+    loop_status = 0
+    while loop_status < 3:
+        if label == "遅刻":
+            status = "chikoku"
+        else:
+            status = "kesseki"
+        logger.info(f"{label}の処理を開始")
+        logger.info(f"{label}の確認")
+        play_sound(os.path.join(GUIDE_PATH,f"{status}_kakunin.wav"))
+        sleep(0.5)
+        play_sound(os.path.join(GUIDE_PATH,"yes_or_no.wav"))
+        rec_text = listen_util_ctrl()
+        if rec_text[1] == "error":
+            logger.info("エラーが発生") #もうちょっと考える
+            return
+        if rec_text[0] == "はい":
+            logger.info(f"{label}が確定")
+            play_sound(os.path.join(GUIDE_PATH,f"{status}_kakutei.wav"))
+            send_line(f"システムが{label}を判断しました.")
+            return
+        elif rec_text[0] == "いいえ":
+            logger.info(f"{label}ではない")
+            loop_status += 1
+            if label == "遅刻":
+                label = "欠席"
+            else:
+                label = "遅刻"
+        else:
+            logger.info("はい・いいえ以外が判定されています")
     else:
-        logger.info("欠席の処理を開始")
+        logger.info("いたずら，または遅刻でも欠席でもない可能性があります.")
+        send_line("いたずら，または遅刻でも欠席でもない連絡です.")
     return
 
 # 非定型
