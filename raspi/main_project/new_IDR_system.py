@@ -17,7 +17,7 @@ import serial
 import speech_recognition as sr
 import sys
 import threading
-from time import sleep
+from time import sleep, strftime
 import tkinter as tk
 from tkinter import scrolledtext
 import uuid
@@ -282,6 +282,40 @@ def pattern_res(label:str):
 # 非定型
 def non_pattern_res(text:str):
     logger.info('非定型処理を開始')
+    def gemini_answer(input_txt:str):
+        querry_vec = embedder.encode(input_txt).tolist()
+        results = collection.query(query_embeddings=[querry_vec], n_results=3)
+        context = "\n".join(results["documents"][0])
+        prompt = (
+            #プロンプトを作成
+        )
+        try:
+            response = gemini_client.models.generate_content(
+                model = gemini_model,
+                contents = prompt,
+                config = gemini_config
+            )
+            if not (response.text or "").strip():
+                logger.error("回答を生成できませんでした．")
+                return "error","回答を生成することができませんでした．"
+            return "success",response.text.strip()
+        except Exception as e:
+            logger.error("エラーが発生しました",exc_info=True)
+            return "error","Geminiからの応答にエラーがあります．"
+    def gtts_gen(gen_text:str):
+        logger.info("gTTSでの音声生成処理を開始")
+        lang = "ja"
+        tts = gTTS(gen_text,lang=lang)
+        gen_file_name = f"{strftime('%Y%m%d_%H%M%S')}.wav"
+        sound_path = os.path.join(GENERATE_SOUND_PATH,gen_file_name)
+        tts.save(sound_path)
+        play_sound(sound_path)
+        # 音声ファイルを削除する
+    generate_status , output_text = gemini_answer(text)
+    if generate_status == "success":
+        gtts_gen(output_text)
+    else:
+        play_sound(os.path.join(GUIDE_PATH,"error.wav"))
     return
 
 # LINE
