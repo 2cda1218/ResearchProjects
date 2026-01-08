@@ -1,0 +1,11 @@
+chromadb
+dotenv
+fasttext
+google-genai
+gTTS
+pandas
+PyPDF2
+requests
+sentence_transformers
+serial
+speech_recognition
