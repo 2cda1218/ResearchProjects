@@ -8,14 +8,12 @@ from gtts import gTTS
 import logging
 import multiprocessing as mp
 import os
-import pandas as pd
 import PyPDF2
 import requests
 import RPi.GPIO as GPIO
 from sentence_transformers import SentenceTransformer as ST
 import serial
 import speech_recognition as sr
-import sys
 import threading
 from time import sleep, strftime
 import tkinter as tk
@@ -287,7 +285,16 @@ def non_pattern_res(text:str):
         results = collection.query(query_embeddings=[querry_vec], n_results=3)
         context = "\n".join(results["documents"][0])
         prompt = (
-            #プロンプトを作成
+            "あなたは「学校の教師」です．\n"
+            "【学校情報】の内容に従って，【質問】セクションの内容に対して丁寧な回答を簡潔に作成してください．\n"
+            "該当する情報が存在しない場合は「すみません，この質問にはお答えすることができません」と答えてください．"
+            "助言，補足説明，前置きは不要です．\n"
+            "回答が可能な場合は，単語のみでの回答はせずに文章を作成してください．\n"
+            "質問内容が「緊急」と判断される場合は「担当に交代します」と答えてください\n"
+            "質問内容から遅刻または欠席と判断できる場合は「遅刻」または「欠席」とだけ回答してください．\n"
+            "回答の際に情報が不足している場合に，推測や一般知識によって補完をしてはいけない.\n"
+            f"【学校情報】\n{context}\n"
+            f"【質問】\n{text}"
         )
         try:
             response = gemini_client.models.generate_content(
@@ -302,17 +309,28 @@ def non_pattern_res(text:str):
         except Exception as e:
             logger.error("エラーが発生しました",exc_info=True)
             return "error","Geminiからの応答にエラーがあります．"
+        
     def gtts_gen(gen_text:str):
         logger.info("gTTSでの音声生成処理を開始")
         lang = "ja"
         tts = gTTS(gen_text,lang=lang)
         gen_file_name = f"{strftime('%Y%m%d_%H%M%S')}.wav"
         sound_path = os.path.join(GENERATE_SOUND_PATH,gen_file_name)
+        logger.info(f'{sound_path}に生成した音声を保存しました')
         tts.save(sound_path)
+        logger.info('生成した音声を再生')
         play_sound(sound_path)
-        # 音声ファイルを削除する
+        logger.info("使用済みの音声を削除")
+        os.remove(sound_path)
+
     generate_status , output_text = gemini_answer(text)
     if generate_status == "success":
+        if output_text == "遅刻" or "欠席":
+            logger.info(f"{output_text}とGeminiが判断しました")
+            pattern_res(output_text)
+            return
+        elif output_text == "緊急":
+            logger.info("緊急と判断されたため担当に変更")
         gtts_gen(output_text)
     else:
         play_sound(os.path.join(GUIDE_PATH,"error.wav"))
