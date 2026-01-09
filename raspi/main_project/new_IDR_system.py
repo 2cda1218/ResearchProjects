@@ -58,7 +58,8 @@ logger.info('GPIOの初期化成功')
 # シリアル通信の初期化
 logger.info('シリアル通信の初期化開始...')
 
-ser = serial.Serial('/dev/tty/ACM0', 9600)
+# ser = serial.Serial('/dev/tty/ACM0', 9600) pi4とは設計が異なる
+ser = serial.Serial("/dev/ttyACM0", 9600)
 ser.flush()
 sleep(2)
 
@@ -84,7 +85,7 @@ gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
 gemini_model = "gemini-2.5-flash-lite" # システムドキュメントのGeminiドキュメントページリンクでモデルを確認！廃止された過去のモデルになっていないかチェック
 gemini_config = types.GenerateContentConfig(temperature=0.7,max_output_tokens=512)
 
-check_model = mp.Process(train.train_model) # multiprocessingで非同期化(新規学習が必要な場合にthreadingやasyncioより効率的に計算資源を使える)
+check_model = mp.Process(terget = train.train_model) # multiprocessingで非同期化(新規学習が必要な場合にthreadingやasyncioより効率的に計算資源を使える)
 check_model.start()
 
 logger.info('分類機能の初期化成功')
@@ -427,7 +428,7 @@ def main():
             except Exception as e:
                 logger.error(f'エラーが起きました: {e}', exc_info=True)
             finally:
-                except_finally(pwm=pwm)
+                except_finally()
 
 
 if __name__ == '__main__':
