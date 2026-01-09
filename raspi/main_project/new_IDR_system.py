@@ -25,7 +25,7 @@ import datasets.train_model as train
 
 # path登録
 MAIN_DIR = os.path.dirname(os.path.abspath(__file__))
-PDF_PATH = os.path.join(MAIN_DIR,"datasets","schooltest.pdf")
+PDF_PATH = os.path.join(MAIN_DIR,"datasets","school_test.pdf")
 MODEL_PATH = os.path.join(MAIN_DIR,"datasets","ft_model.bin")
 GUIDE_PATH = os.path.join(MAIN_DIR,"sound_files","guide")
 GENERATE_SOUND_PATH = os.path.join(MAIN_DIR,"sound_files","generate")
@@ -48,7 +48,7 @@ logger.info('TOKENをロードしました')
 logger.info('GPIOの初期化開始...')
 
 GPIO.setmode(GPIO.BCM)
-servo_pin = 9
+servo_pin = 9 # 21番pinのGPIO 9
 GPIO.setup(servo_pin,GPIO.OUT)
 pwm = GPIO.PWM(servo_pin,50)
 pwm.start(0)
@@ -74,17 +74,17 @@ embedder = ST("all-MiniLM-L6-v2")
 
 chroma_client = chromadb.Client()
 try:
-    chroma_client.delete_collection("schooltest.pdf")
+    chroma_client.delete_collection("school_test.pdf_db") # shool_test.pdf_dbというコレクション名であってファイル指定の引数ではない
 except:
     logger.info("該当するデータは見つかりませんでした")
     pass
-collection = chroma_client.get_or_create_collection("schooltest.pdf")
+collection = chroma_client.get_or_create_collection("school_test.pdf_db")
 
 gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
-gemini_model = "gemini-2.5-flash-lite"
+gemini_model = "gemini-2.5-flash-lite" # システムドキュメントのGeminiドキュメントページリンクでモデルを確認！廃止された過去のモデルになっていないかチェック
 gemini_config = types.GenerateContentConfig(temperature=0.7,max_output_tokens=512)
 
-check_model = mp.Process(train.train_model)
+check_model = mp.Process(train.train_model) # multiprocessingで非同期化(新規学習が必要な場合にthreadingやasyncioより効率的に計算資源を使える)
 check_model.start()
 
 logger.info('分類機能の初期化成功')
@@ -117,7 +117,7 @@ def create_gui():
 
     root.mainloop()
 
-# 最終行取得
+# 最終行取得(関数として用意しているが使用箇所が一ヶ所だから統合してもよさそう?)
 def get_last_line(file_path:str):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -159,7 +159,7 @@ def set_servo_angle(angle:int):
 
 # 音声再生
 def play_sound(sound_path:str):
-    os.system(f'aplay {sound_path}') # 'aplay {sound_path} &'で非同期で再生できるが必要あるのか? mp3再生の場合はaplayをmpg321にする
+    os.system(f'aplay {sound_path}') # mp3再生の場合はaplayをmpg321にする
 
 # 音声認識
 def listen_util_ctrl():
@@ -190,11 +190,14 @@ def listen_util_ctrl():
                 # 接続不可の時
                 audio.extend([f"サービスに接続できませんでした : {e}","error"])
                 logger.warning("サービスへの接続に失敗しました",exc_info=True)
+                return audio
             
             except Exception as e:
                 # その他のエラー
                 audio.extend([f"エラーが発生しました : {e}","error"])
                 logger.warning("エラーが発生しました",exc_info=True)
+                return audio
+            
             finally:
                 loop_count += 1
                 logger.info(f"{loop_count}回目の録音に失敗しました")
@@ -227,7 +230,7 @@ def predict(user_input:str):
     label1, score1 = labels[0].replace("__label__",""), scores[0]
     label2, score2 = labels[1].replace("__label__",""), scores[0]
     
-    logger.info(f"分類結果\nLabels: Label1 [{label1}], Label2 [{label2}]\nScores: Score1 [{score1}], Score2 [{score2}]\n分類時間: {end_time - start_time}")
+    logger.info(f"分類結果\nLabels: Label1 [{label1}], Label2 [{label2}]\nScores: Score1 [{score1}], Score2 [{score2}]\n")
 
     if score1 >= 0.7 and abs(score1 - score2) >= 0.2:
         logger.info(f"定型処理:{label1}")
@@ -397,13 +400,17 @@ def main():
                     if status == "error":
                         logger.info("サービスへの接続またはその他のエラーによってシステムを実行できません")
                         play_sound(GUIDE_PATH,'error.wav')
+                        send_line(f"【エラー情報】\n{rec_text}")
+                        # 本来は別の受話器に飛ばして人に対応してもらえるようにするのが理想だが，今回は電話を終了する方針を取る
+                        set_servo_angle(90)
+                        continue
                     send_line(f"【認識した音声】\n{rec_text}")
                     
                     # 分類処理
                     pattern , label = predict(rec_text)
 
                     
-                    # 分類→定型or非定型(rag()で分類→命名は変更の可能性あり)
+                    # 分類→定型or非定型(predictの結果分岐から実行しちゃっても良いかも)
                     if pattern == 'pattern':
                         pattern_res(label)
                     else:
