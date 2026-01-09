@@ -8,4 +8,7 @@ PyPDF2
 requests
 sentence_transformers
 serial
-speech_recognition
+SpeechRecognition
+rpi.gpio
+pyserial
+pyaudio
