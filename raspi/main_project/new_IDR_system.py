@@ -66,7 +66,7 @@ sleep(2)
 logger.info('シリアル通信の初期化成功')
 
 # 固定応答ファイル整合性確認 threadingで非同期化
-file_check_thread = threading.Thread(target=cguide.check_wav_files)
+file_check_thread = threading.Thread(target=cguide.check_mp3_files)
 file_check_thread.start()
 
 # 分類の初期化
@@ -85,7 +85,7 @@ gemini_client = gemini.Client(api_key=GEMINI_TOKEN)
 gemini_model = "gemini-2.5-flash-lite" # システムドキュメントのGeminiドキュメントページリンクでモデルを確認！廃止された過去のモデルになっていないかチェック
 gemini_config = types.GenerateContentConfig(temperature=0.7,max_output_tokens=512)
 
-check_model = mp.Process(terget = train.train_model) # multiprocessingで非同期化(新規学習が必要な場合にthreadingやasyncioより効率的に計算資源を使える)
+check_model = mp.Process(target = train.train_model) # multiprocessingで非同期化(新規学習が必要な場合にthreadingやasyncioより効率的に計算資源を使える)
 check_model.start()
 
 logger.info('分類機能の初期化成功')
@@ -160,7 +160,7 @@ def set_servo_angle(angle:int):
 
 # 音声再生
 def play_sound(sound_path:str):
-    os.system(f'aplay {sound_path}') # mp3再生の場合はaplayをmpg321にする
+    os.system(f'mpg321 {sound_path}') # wav再生の場合はmpg321をaplayにする
 
 # 音声認識
 def listen_util_ctrl():
@@ -172,20 +172,25 @@ def listen_util_ctrl():
             audio = []
             # 無音検知
             try:
-            #タイムアウト内でも録音続行
+            # 録音処理
                 audio.extend([r.listen(source,timeout = 5),"success"])# 5秒無音でタイムアウト
                 logger.info('音声取得成功')
+                break
 
             except sr.WaitTimeoutError:
                 # 無音の場合
                 audio.extend(["無音","error"])
                 logger.warning("無音でした")
-                play_sound(GUIDE_PATH,"retry.wav")
+                play_sound(os.path.join(GUIDE_PATH,"retry.mp3"))
+                loop_count += 1
+                logger.info(f"{loop_count}回目の録音に失敗しました")
             except sr.UnknownValueError:
                 # 認識不可の時
                 audio.extend(["音声が認識できません","error"])
                 logger.warning("認識が不可能でした")
-                play_sound(GUIDE_PATH,"retry.wav")
+                play_sound(os.path.join(GUIDE_PATH,"retry.mp3"))
+                loop_count += 1
+                logger.info(f"{loop_count}回目の録音に失敗しました")
             
             except sr.RequestError as e:
                 # 接続不可の時
@@ -198,10 +203,6 @@ def listen_util_ctrl():
                 audio.extend([f"エラーが発生しました : {e}","error"])
                 logger.warning("エラーが発生しました",exc_info=True)
                 return audio
-            
-            finally:
-                loop_count += 1
-                logger.info(f"{loop_count}回目の録音に失敗しました")
         else:
             logger.info("異常終了しました")
 
@@ -255,17 +256,17 @@ def pattern_res(label:str):
             status = "kesseki"
         logger.info(f"{label}の処理を開始")
         logger.info(f"{label}の確認")
-        play_sound(os.path.join(GUIDE_PATH,f"{status}_kakunin.wav"))
+        play_sound(os.path.join(GUIDE_PATH,f"{status}_kakunin.mp3"))
         sleep(0.5)
-        play_sound(os.path.join(GUIDE_PATH,"yes_or_no.wav"))
+        play_sound(os.path.join(GUIDE_PATH,"yes_or_no.mp3"))
         rec_text = listen_util_ctrl()
         if rec_text[1] == "error":
             logger.info("エラーが発生") #もうちょっと考える
             return
         if rec_text[0] == "はい":
             logger.info(f"{label}が確定")
-            play_sound(os.path.join(GUIDE_PATH,f"{status}_kakutei.wav"))
-            send_line(f"システムが{label}を判断しました.")
+            play_sound(os.path.join(GUIDE_PATH,f"{status}_kakutei.mp3"))
+            #send_line(f"システムが{label}を判断しました.")
             return
         elif rec_text[0] == "いいえ":
             logger.info(f"{label}ではない")
@@ -278,7 +279,8 @@ def pattern_res(label:str):
             logger.info("はい・いいえ以外が判定されています")
     else:
         logger.info("いたずら，または遅刻でも欠席でもない可能性があります.")
-        send_line("いたずら，または遅刻でも欠席でもない連絡です.")
+        play_sound(os.path.join(GUIDE_PATH,"error.mp3"))
+        #send_line("いたずら，または遅刻でも欠席でもない連絡です.")
     return
 
 # 非定型
@@ -318,7 +320,7 @@ def non_pattern_res(text:str):
         logger.info("gTTSでの音声生成処理を開始")
         lang = "ja"
         tts = gTTS(gen_text,lang=lang)
-        gen_file_name = f"{strftime('%Y%m%d_%H%M%S')}.wav"
+        gen_file_name = f"{strftime('%Y%m%d_%H%M%S')}.mp3"
         sound_path = os.path.join(GENERATE_SOUND_PATH,gen_file_name)
         logger.info(f'{sound_path}に生成した音声を保存しました')
         tts.save(sound_path)
@@ -329,7 +331,7 @@ def non_pattern_res(text:str):
 
     generate_status , output_text = gemini_answer(text)
     if generate_status == "success":
-        if output_text == "遅刻" or "欠席":
+        if output_text in ("遅刻", "欠席"):
             logger.info(f"{output_text}とGeminiが判断しました")
             pattern_res(output_text)
             return
@@ -337,7 +339,7 @@ def non_pattern_res(text:str):
             logger.info("緊急と判断されたため担当に変更")
         gtts_gen(output_text)
     else:
-        play_sound(os.path.join(GUIDE_PATH,"error.wav"))
+        play_sound(os.path.join(GUIDE_PATH,"error.mp3"))
     return
 
 # LINE
@@ -363,10 +365,11 @@ def send_line(ctx:str):
     else:
         logger.warning(f'エラーが発生しました\nステータスコード:{response.status_code}\n{response.text}')
 
-# 異常終了
-def except_finally():
+# 異常終了共通処理
+def except_function():
     pwm.stop()
     GPIO.cleanup()
+    exit()
 
 def main():
     cont_sys = True
@@ -378,9 +381,9 @@ def main():
         gui_thread.start()
     except Exception as e:
         logger.error(f'エラーが起きました: {e}', exc_info=True)
+        except_function()
         return
-    finally:
-        except_finally()
+
     # PDFのロード
     load_pdf()
 
@@ -395,17 +398,17 @@ def main():
                     # 自動応答システム本体↓↓↓
                     logger.info('自動応答システム起動')
                     
-                    play_sound(os.path.join(GUIDE_PATH,"guide.wav"))
+                    play_sound(os.path.join(GUIDE_PATH,"guide.mp3"))
 
                     rec_text, status = listen_util_ctrl()
                     if status == "error":
                         logger.info("サービスへの接続またはその他のエラーによってシステムを実行できません")
-                        play_sound(GUIDE_PATH,'error.wav')
-                        send_line(f"【エラー情報】\n{rec_text}")
+                        play_sound(os.path.join(GUIDE_PATH,'error.mp3'))
+                        #send_line(f"【エラー情報】\n{rec_text}")
                         # 本来は別の受話器に飛ばして人に対応してもらえるようにするのが理想だが，今回は電話を終了する方針を取る
                         set_servo_angle(90)
                         continue
-                    send_line(f"【認識した音声】\n{rec_text}")
+                    #send_line(f"【認識した音声】\n{rec_text}")
                     
                     # 分類処理
                     pattern , label = predict(rec_text)
@@ -417,19 +420,27 @@ def main():
                     else:
                         non_pattern_res(rec_text)
                     
+                    play_sound(os.path.join(GUIDE_PATH,"end.mp3"))
+                    sleep(0.5)
+
                     set_servo_angle(90)
                     
+                    if ser.in_waiting > 0:
+                        logger.warning("待機中のシリアルが残っています")
+                        logger.warning("シリアル通信をリセットします")
+                        ser.read_all()
                     logger.info('自動応答システム終了')
                     sleep(5)
                     
             except KeyboardInterrupt:
                 logger.info('システムを終了します')
                 cont_sys = False
+                except_function()
             except Exception as e:
                 logger.error(f'エラーが起きました: {e}', exc_info=True)
-            finally:
-                except_finally()
+                except_function()
 
 
 if __name__ == '__main__':
     main()
+    exit()
